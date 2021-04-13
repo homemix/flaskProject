@@ -22,7 +22,8 @@ login_manager.login_message_category = 'info'
 @app.route('/')
 @app.route("/home")
 def home():
-    post = Post.query.all()
+    page = request.args.get('page', 1, type=int)
+    post = Post.query.order_by(Post.date_posted.desc()).paginate(per_page=5, page=page)
     return render_template('home.html', posts=post)
 
 
@@ -110,7 +111,7 @@ def new_post():
         db.session.commit()
         flash('Your post has been created', 'success')
         return redirect(url_for('home'))
-    return render_template('create_post.html', title='New Post', form=form,legend='Create Post')
+    return render_template('create_post.html', title='New Post', form=form, legend='Create Post')
 
 
 @app.route("/post/<int:post_id>")
@@ -119,7 +120,7 @@ def post(post_id):
     return render_template('post.html', title=post.title, post=post)
 
 
-@app.route("/post/<int:post_id>/update",methods=['GET', 'POST'])
+@app.route("/post/<int:post_id>/update", methods=['GET', 'POST'])
 @login_required
 def update_post(post_id):
     post = Post.query.get_or_404(post_id)
@@ -127,19 +128,19 @@ def update_post(post_id):
         abort(403)
     form = PostForm()
     if form.validate_on_submit():
-        post.title=form.title.data
+        post.title = form.title.data
         post.content = form.content.data
         db.session.commit()
-        flash('Post Updated successfully','success')
-        return redirect(url_for('post',post_id=post.id))
-    elif request.method =='GET':
+        flash('Post Updated successfully', 'success')
+        return redirect(url_for('post', post_id=post.id))
+    elif request.method == 'GET':
         form.title.data = post.title
-        form.content.data=post.content
+        form.content.data = post.content
     return render_template('create_post.html', title='Update Post',
-                           form=form,legend='Update Post')
+                           form=form, legend='Update Post')
 
 
-@app.route("/post/<int:post_id>/delete",methods=['POST'])
+@app.route("/post/<int:post_id>/delete", methods=['POST'])
 @login_required
 def delete_post(post_id):
     post = Post.query.get_or_404(post_id)
@@ -147,8 +148,19 @@ def delete_post(post_id):
         abort(403)
     db.session.delete(post)
     db.session.commit()
-    flash('Post deleted successfully','success')
+    flash('Post deleted successfully', 'success')
     return redirect(url_for('home'))
+
+
+@app.route("/user/<string:username>")
+def user_posts(username):
+    page = request.args.get('page', 1, type=int)
+    user = User.query.filter_by(username=username).first_or_404()
+    post = Post.query.filter_by(author=user)\
+        .order_by(Post.date_posted.desc())\
+        .paginate(per_page=5, page=page)
+    return render_template('user_post.html', posts=post,user=user)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
