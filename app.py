@@ -1,11 +1,12 @@
 from flask import Flask
 from flask import render_template, redirect, url_for, flash, request, abort
-from forms import RegistrationForm, LoginForm, UpdateAccountForm, PostForm
+from forms import RegistrationForm, LoginForm, UpdateAccountForm, PostForm, RequestResetForm, ResetPasswordForm
 from models import db, User, Post
 from flask_bcrypt import Bcrypt
 from flask_login import login_user, current_user, logout_user, login_required
 from models import login_manager
 from PIL import Image
+from flask_mail import Mail
 import secrets
 import os
 
@@ -17,6 +18,11 @@ bcrypt = Bcrypt(app)
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message_category = 'info'
+app.config['MAIL_SERVER'] = 'smtp.googlemail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 
 
 @app.route('/')
@@ -156,10 +162,39 @@ def delete_post(post_id):
 def user_posts(username):
     page = request.args.get('page', 1, type=int)
     user = User.query.filter_by(username=username).first_or_404()
-    post = Post.query.filter_by(author=user)\
-        .order_by(Post.date_posted.desc())\
+    post = Post.query.filter_by(author=user) \
+        .order_by(Post.date_posted.desc()) \
         .paginate(per_page=5, page=page)
-    return render_template('user_post.html', posts=post,user=user)
+    return render_template('user_post.html', posts=post, user=user)
+
+
+def send_reset_email(user):
+    pass
+
+
+@app.route("/reset_password", methods=['GET', 'POST'])
+def reset_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    form = RequestResetForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        send_reset_email(user)
+        flash("An email has been send with instructions to reset", 'info')
+        return redirect(url_for('login'))
+    return render_template('reset_request.html', title='Reset Password', form=form)
+
+
+@app.route("/reset_password/<token>", methods=['GET', 'POST'])
+def reset_token(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    user = User.verify_reset_token(token)
+    if user is None:
+        flash('Invalid or Expired token', 'warning')
+        return redirect(url_for('reset_request'))
+    form = ResetPasswordForm()
+    return render_template('reset_token.html', title='Reset Password', form=form)
 
 
 if __name__ == '__main__':
