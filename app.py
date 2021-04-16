@@ -6,7 +6,7 @@ from flask_bcrypt import Bcrypt
 from flask_login import login_user, current_user, logout_user, login_required
 from models import login_manager
 from PIL import Image
-from flask_mail import Mail
+from flask_mail import Mail,Message
 import secrets
 import os
 
@@ -23,7 +23,7 @@ app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-
+mail = Mail(app)
 
 @app.route('/')
 @app.route("/home")
@@ -169,8 +169,16 @@ def user_posts(username):
 
 
 def send_reset_email(user):
-    pass
-
+    token =user.get_reset_token()
+    msg= Message('Password Reset request',
+                 sender='noreply@thewolftechnologies.com',
+                 recipients=[user.email])
+    msg.body =f''' To rest your password visit the following link:
+    {url_for('reset_token',token=token,_external=True)}
+    
+    If you didn't request this Ignore this email.
+    '''
+    mail.send(msg)
 
 @app.route("/reset_password", methods=['GET', 'POST'])
 def reset_request():
@@ -185,7 +193,7 @@ def reset_request():
     return render_template('reset_request.html', title='Reset Password', form=form)
 
 
-@app.route("/reset_password/<token>", methods=['GET', 'POST'])
+@app.route("/reset_token/<token>", methods=['GET', 'POST'])
 def reset_token(token):
     if current_user.is_authenticated:
         return redirect(url_for('home'))
@@ -194,6 +202,12 @@ def reset_token(token):
         flash('Invalid or Expired token', 'warning')
         return redirect(url_for('reset_request'))
     form = ResetPasswordForm()
+    if form.validate_on_submit():
+        hashed_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
+        user.password =hashed_password
+        db.session.commit()
+        flash('Your password is updated succesfully', 'success')
+        return redirect(url_for('login'))
     return render_template('reset_token.html', title='Reset Password', form=form)
 
 
